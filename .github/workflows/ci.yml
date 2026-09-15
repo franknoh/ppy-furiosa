@@ -1,0 +1,30 @@
+name: ci
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: ${{ matrix.python }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.12', '3.13', '3.14']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff
+      - run: uv sync --locked --python '${{ matrix.python }}'
+      - run: bash scripts/check.sh
+      - run: uv build --out-dir build/wheel
+      - run: uv venv build/wheel-venv --python '${{ matrix.python }}'
+      - run: uv pip install --python build/wheel-venv/bin/python build/wheel/*.whl
+      - run: build/wheel-venv/bin/python scripts/wheel_smoke.py
