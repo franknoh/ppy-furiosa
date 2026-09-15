@@ -10,7 +10,7 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = ["ppy-lang[llvm]>=0.3.2,<0.4"]
+dependencies = ["ppy-lang[llvm]>=0.3.3,<0.4"]
 
 [project.entry-points."ppy.plugins"]
 furiosa = "ppy_furiosa.plugin:create_plugin"
@@ -32,7 +32,7 @@ path = "src/ppy_furiosa/version.py"
 dev = ["pytest>=8", "ruff", "pyright", "pylint", "twine"]
 
 [tool.uv]
-constraint-dependencies = ["ppy-lang==0.3.2"]
+constraint-dependencies = ["ppy-lang==0.3.3"]
 
 [tool.ppy.plugins.furiosa]
 enabled = true

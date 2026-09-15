@@ -7,7 +7,7 @@ from dataclasses import replace
 from ppy_compiler.backend import BackendValidationError
 from ppy_compiler.ir import Builder, IRFunction, IRModule, Operation, Pass, PassContext
 
-from .compatibility import create_operation, ir_attributes
+from .compatibility import create_operation, ir_attributes, parameter_attributes
 from .mapping import Mapping, Symbol
 from .physical import broadcast_pipeline
 from .semantic import SemanticTensor
@@ -29,9 +29,15 @@ class LowerBroadcast(Pass):
             raise BackendValidationError(
                 "furiosa", "source broadcast supports one device function per module"
             )
-        self._lower_function(module, functions[0])
+        try:
+            self._lower_function(module, functions[0])
+        except ValueError as error:
+            raise BackendValidationError(
+                "furiosa", str(error), location=functions[0].location
+            ) from error
         module.require("rngd", 1)
         module.dialects.pop("furiosa", None)
+        module.dialects.pop("tensor", None)
         return True
 
     @staticmethod
@@ -63,8 +69,13 @@ class LowerBroadcast(Pass):
                 "broadcast must read the input and store its result to the output",
                 location=function.location,
             )
-        source = SemanticTensor.from_ir(block.arguments[0].type)
-        target = SemanticTensor.from_ir(block.arguments[1].type)
+        source, target = (
+            SemanticTensor.from_ir(
+                argument.type,
+                mutable=parameter_attributes(function)[index].get("ownership") == "mut",
+            )
+            for index, argument in enumerate(block.arguments)
+        )
         target.check_store(source.broadcast(ir_attributes(broadcast).get("copies")))
         hidden, copies = Symbol("H"), Symbol("Copies")
         vector, replicated = Mapping((hidden,)), Mapping((copies, hidden))
