@@ -10,15 +10,15 @@ pinned at `850428729c1b9af0c0b86a9cf694e3b4b4486b29`.
 
 ## Status
 
-The current development version is **0.1.0a1**, using **PPy 0.3.2**. The package
+The current development version is **0.1.0a2**, using **PPy 0.3.3**. The package
 registers `ppy.plugins`, `ppy.backends`, and the `furiosa-rust` emit format.
 Commands use PPy's CLI.
 
-PPy 0.3.2 provides the custom-type and operation frontend bridge, project-scoped
-dialect registries, and optional SDK checks for text emission. The extension
-uses these APIs; the earlier PPy frontend blocker and global registry workaround
-no longer apply. The first supported computation is a BF16 broadcast. Complete
-MOA kernels, tuning, and hardware correctness validation are still pending.
+The extension uses PPy's common `Tensor`, `bf16`, and `Mut` annotations, with
+call-scoped borrowing and backend-selected type conversion. Shapes and element
+formats survive IR serialization, and rejected operations report their reason.
+The first supported computation is a BF16 broadcast. Complete MOA kernels,
+tuning, and hardware correctness validation are still pending.
 
 ## Setup
 
@@ -33,7 +33,7 @@ uv run ppy doctor
 | --- | --- |
 | Development Python | `3.12.13` in `.python-version` |
 | Supported Python | `>=3.12` in `pyproject.toml` |
-| Compiler | `ppy-lang[llvm]==0.3.2` in `uv.lock` and uv constraints |
+| Compiler | `ppy-lang[llvm]==0.3.3` in `uv.lock` and uv constraints |
 | Package version | `src/ppy_furiosa/version.py` |
 | Furiosa SDK | `cargo-furiosa-opt` and `furiosa-opt-std` `0.6.0` |
 | Generated Rust toolchain | `nightly-2026-05-01` |
@@ -61,24 +61,26 @@ Save the source below as `kernel.ppy` in this project, then emit Rust:
 uv run ppy emit furiosa-rust kernel.ppy -o kernel.rs
 ```
 
-The same source is checked in at `examples/broadcast/kernel.ppy`. Shapes and
-element formats use PPy's annotation metadata; writable destinations use
-`fx.MutableTensor`:
+The same source is checked in at `examples/broadcast/kernel.ppy`. Tensor types
+use `ppy.Tensor[dtype, shape]`; writable destinations use `ppy.Mut`:
 
 ```python
-from typing import Annotated
-
 import ppy
 import ppy_furiosa as fx
 
-Input = Annotated[fx.Tensor, ppy.Shape(3840), ppy.DType("bf16")]
-Output = Annotated[fx.MutableTensor, ppy.Shape(256, 3840), ppy.DType("bf16")]
 
-
-def broadcast(x: Input, out: Output) -> None:
+def broadcast(
+    x: ppy.Tensor[ppy.bf16, (3840,)],
+    out: ppy.Mut[ppy.Tensor[ppy.bf16, (256, 3840)]],
+) -> None:
     value = fx.broadcast(x, copies=256)
     fx.store(out, value)
 ```
+
+`fx.broadcast` borrows its input for reading; `fx.store` borrows its destination
+for writing and its value for reading. These compile-only operations retain no
+arguments. Version `0.1.0a2` replaces `fx.Tensor` and `fx.MutableTensor` with the
+common PPy annotations above.
 
 Emission uses the official baseline's full-width fetch, 256-slice broadcast, and
 16-element collection from
