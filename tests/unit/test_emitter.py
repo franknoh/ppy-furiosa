@@ -5,18 +5,17 @@ from pathlib import Path
 import pytest
 from ppy_compiler.backend import BackendValidationError
 from ppy_compiler.ir import Operation
-from ppy_compiler.ir.codec import decode, encode
 
 from ppy_furiosa.compatibility import ir_attributes
 from ppy_furiosa.emitter import emit_rust
 from ppy_furiosa.mapping import Const, Mapping, Symbol
-from ppy_furiosa.physical import STREAM, broadcast_module, make_registry
+from ppy_furiosa.physical import STREAM, broadcast_module
 
 
 @pytest.mark.parametrize("reserved", ["Context", "DmTensor", "HbmTensor", "SwitchConfig", "bf16"])
 def test_axis_cannot_shadow_sdk_types(reserved: str) -> None:
-    registry = make_registry()
-    module = decode(encode(broadcast_module(), registry).replace("H", reserved), registry)
+    module = broadcast_module()
+    ir_attributes(module)["rngd.axes"] = {reserved: 3840, "Copies": 256}
     with pytest.raises(BackendValidationError, match="reserved"):
         emit_rust(module)
 

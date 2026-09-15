@@ -12,18 +12,17 @@ from ppy_furiosa.physical import make_registry
 
 
 def source(size: int = 3840, dtype: str = "bf16", copies: int = 256, mutable: bool = True) -> str:
-    output_type = "MutableTensor" if mutable else "Tensor"
-    output = (
-        f'Annotated[ppy_furiosa.{output_type}, ppy.Shape({copies}, {size}), ppy.DType("{dtype}")]'
-    )
+    output = f"ppy.Tensor[ppy.{dtype}, ({copies}, {size})]"
+    if mutable:
+        output = f"ppy.Mut[{output}]"
     return (
-        "from typing import Annotated\nimport ppy\nimport ppy_furiosa\n\n"
+        "import ppy\nimport ppy_furiosa as fx\n\n"
         "def broadcast_kernel(\n"
-        f'    x: Annotated[ppy_furiosa.Tensor, ppy.Shape({size}), ppy.DType("{dtype}")],\n'
+        f"    x: ppy.Tensor[ppy.{dtype}, ({size},)],\n"
         f"    out: {output},\n"
         ") -> None:\n"
-        f"    value = ppy_furiosa.broadcast(x, copies={copies})\n"
-        "    ppy_furiosa.store(out, value)\n"
+        f"    value = fx.broadcast(x, copies={copies})\n"
+        "    fx.store(out, value)\n"
     )
 
 
@@ -69,27 +68,45 @@ def test_real_ppy_source_emit(tmp_path: Path, size: int, opt_level: int) -> None
 
 
 @pytest.mark.parametrize(
-    "text,operation",
+    "text,operation,reason",
     [
-        (source(31), "ppy_furiosa.broadcast"),
-        (source(dtype="f32"), "ppy_furiosa.broadcast"),
-        (source(copies=128), "ppy_furiosa.broadcast"),
-        (source(mutable=False), "ppy_furiosa.store"),
-        (source().replace("ppy.Shape(256, 3840)", "ppy.Shape(256, 32)"), "ppy_furiosa.store"),
-        (source().replace("ppy.Shape(3840), ", ""), "ppy_furiosa.broadcast"),
+        (source(31), "ppy_furiosa.broadcast", "multiple of 16"),
+        (source(dtype="f32"), "ppy_furiosa.broadcast", "bf16 only"),
+        (source(copies=128), "ppy_furiosa.broadcast", "copies=256"),
+        (source(mutable=False), "ppy_furiosa.store", "ppy.Mut"),
+        (source().replace("(256, 3840)", "(256, 32)"), "ppy_furiosa.store", "must match"),
+        (
+            source().replace("ppy.Tensor[ppy.bf16, (3840,)]", "ppy.Tensor"),
+            "ppy_furiosa.broadcast",
+            "ppy.Tensor[dtype, shape]",
+        ),
     ],
 )
-def test_source_contract_errors_do_not_emit(tmp_path: Path, text: str, operation: str) -> None:
+def test_source_contract_errors_do_not_emit(
+    tmp_path: Path, text: str, operation: str, reason: str
+) -> None:
     result, output = emit(tmp_path, text)
     assert result.returncode != 0
     diagnostic = result.stdout + result.stderr
     assert "error[E1802]" in diagnostic and operation in diagnostic
+    assert reason in diagnostic
     assert "Traceback" not in diagnostic
     assert not output.exists()
 
 
+def test_borrowed_input_and_local_alias_preserve_tensor_facts(tmp_path: Path) -> None:
+    text = source(32).replace(
+        "x: ppy.Tensor[ppy.bf16, (32,)]", "x: ppy.Borrowed[ppy.Tensor[ppy.bf16, (32,)]]"
+    )
+    text = text.replace("    value =", "    destination = out\n    value =")
+    text = text.replace("fx.store(out, value)", "fx.store(destination, value)")
+    result, output = emit(tmp_path, text)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "to_hbm_view" in output.read_text(encoding="utf-8")
+
+
 def test_unsupported_source_flow_is_a_diagnostic(tmp_path: Path) -> None:
-    text = source() + "    ppy_furiosa.store(out, value)\n"
+    text = source() + "    fx.store(out, value)\n"
     result, output = emit(tmp_path, text)
     assert result.returncode != 0
     assert "unsupported source flow" in result.stderr
@@ -103,8 +120,8 @@ def test_source_ir_preserves_call_locations(tmp_path: Path) -> None:
     module = read(output, make_registry())
     artifact = emit_rust(module)
     locations = {(item.operation, item.source_line) for item in artifact.locations}
-    assert ("rngd.switch", 9) in locations
-    assert ("rngd.to_hbm", 10) in locations
+    assert ("rngd.switch", 8) in locations
+    assert ("rngd.to_hbm", 9) in locations
     assert all(item.source_file == "kernel.ppy" for item in artifact.locations)
 
 

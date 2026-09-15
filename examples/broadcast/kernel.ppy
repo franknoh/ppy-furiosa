@@ -1,12 +1,10 @@
-from typing import Annotated
-
 import ppy
 import ppy_furiosa as fx
 
-Input = Annotated[fx.Tensor, ppy.Shape(3840), ppy.DType("bf16")]
-Output = Annotated[fx.MutableTensor, ppy.Shape(256, 3840), ppy.DType("bf16")]
 
-
-def broadcast(x: Input, out: Output) -> None:
+def broadcast(
+    x: ppy.Tensor[ppy.bf16, (3840,)],
+    out: ppy.Mut[ppy.Tensor[ppy.bf16, (256, 3840)]],
+) -> None:
     value = fx.broadcast(x, copies=256)
     fx.store(out, value)

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from ppy_compiler.ir import DialectType, IRType
+from ppy_compiler.ir import BF16, F32, I32, DialectType, IRType
 
 from .mapping import Const, Mapping
 
@@ -41,7 +41,9 @@ class Tensor:  # pylint: disable=too-many-instance-attributes
             "rngd",
             "tensor",
             (
-                self.element.value,
+                {Element.BF16: BF16, Element.F32: F32, Element.I32: I32}.get(
+                    self.element, self.element.value
+                ),
                 self.memory.value,
                 self.logical.to_ir(),
                 self.local.to_ir(),
@@ -59,6 +61,8 @@ class Tensor:  # pylint: disable=too-many-instance-attributes
         if len(value.args) != 8:
             raise ValueError("RNGD tensor requires format, tier, five mappings and mutability")
         element, memory, *_, mutability = value.args
+        if isinstance(element, IRType):
+            element = str(element)
         if not isinstance(element, str) or not isinstance(memory, str):
             raise ValueError("tensor format and memory must be names")
         if mutability not in ("mut", "const"):

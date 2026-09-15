@@ -1,4 +1,4 @@
-"""Project-scoped source semantics and RNGD lowering for PPy 0.3.2."""
+"""Project-scoped source semantics and RNGD lowering for PPy 0.3.3."""
 
 from collections.abc import Sequence
 
@@ -10,13 +10,7 @@ from ppy_compiler.plugins.base import CallResult, Plugin
 
 from .frontend import LowerBroadcast
 from .physical import PhysicalDialect
-from .semantic import (
-    MUTABLE_TENSOR_NAME,
-    TENSOR_NAME,
-    SemanticDialect,
-    SemanticTensor,
-    recognize_call,
-)
+from .semantic import SemanticDialect, SemanticTensor, recognize_call
 from .version import __version__
 
 
@@ -28,14 +22,8 @@ class FuriosaPlugin(Plugin):
     def fingerprint(self) -> str:
         return f"api2:ppy-furiosa={__version__}:furiosa=1:rngd=1"
 
-    def external_types(self) -> dict[str, str]:
-        return {name: name for name in (TENSOR_NAME, MUTABLE_TENSOR_NAME)}
-
-    def lower_type(self, type_: T.Type, facts: Facts) -> IRType | None:
-        if not isinstance(type_, T.Instance) or type_.name not in {
-            TENSOR_NAME,
-            MUTABLE_TENSOR_NAME,
-        }:
+    def lower_type_for_backend(self, type_: T.Type, facts: Facts, backend: str) -> IRType | None:
+        if backend != "furiosa" or not T.is_tensor(type_):
             return None
         try:
             return SemanticTensor.from_facts(type_, facts).to_ir()

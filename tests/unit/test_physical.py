@@ -11,9 +11,10 @@ from ppy_furiosa.physical import broadcast_module, make_registry
 from ppy_furiosa.tensor import Element, Memory, Tensor
 
 
-def test_tensor_roundtrip_preserves_layout_and_mutability() -> None:
+@pytest.mark.parametrize("element", list(Element))
+def test_tensor_roundtrip_preserves_layout_and_mutability(element: Element) -> None:
     shape = Mapping((Symbol("H"),))
-    tensor = Tensor(Element.BF16, Memory.HBM, shape, shape, mutable=True)
+    tensor = Tensor(element, Memory.HBM, shape, shape, mutable=True)
     assert Tensor.from_ir(parse_type(str(tensor.to_ir()))) == tensor
 
 

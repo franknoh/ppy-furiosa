@@ -24,6 +24,10 @@ class _Attributed(Protocol):
     attributes: dict[str, object]
 
 
+class _Function(Protocol):
+    param_attributes: list[dict[str, object]]
+
+
 class _Builder(Protocol):
     def create(
         self,
@@ -48,6 +52,11 @@ class _Module(Protocol):
 def ir_attributes(owner: IRModule | IRFunction | Operation) -> dict[str, object]:
     """Expose untyped upstream payloads for explicit runtime validation."""
     return cast(_Attributed, owner).attributes
+
+
+def parameter_attributes(function: IRFunction) -> list[dict[str, object]]:
+    """Expose source ownership metadata through the public function API."""
+    return cast(_Function, function).param_attributes
 
 
 def create_operation(
