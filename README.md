@@ -55,21 +55,36 @@ enabled = true
 target = "rngd"
 ```
 
-## Emit example
+## `kernel.ppy` → Rust
 
-Generate the current physical broadcast example:
+The intended workflow is:
 
 ```sh
-uv run python examples/broadcast/build_ir.py
+uv run ppy emit furiosa-rust kernel.ppy -o kernel.rs
 ```
 
-This writes `build/broadcast.ppyir` and `build/broadcast.rs` using the physical
-IR builder and emitter API. Its input is a BF16 vector with `H = 3840`. It uses
-the baseline's full-width fetch, 256-slice broadcast, and 16-element collection
-from
+**Pending:** this source workflow needs the PPy 0.3.2 frontend bridge and
+ppy-furiosa's semantic lowering. The following `kernel.ppy` is the proposed
+source API, not an executable example in 0.1.0a1:
+
+```python
+import ppy_furiosa as fr
+
+
+@fr.kernel
+def broadcast(
+    x: fr.Tensor[fr.bf16, (3840,)],
+    out: fr.Tensor[fr.bf16, (256, 3840)],
+):
+    fr.store(out, fr.broadcast(x, copies=256))
+```
+
+The output target is the Rust below. It is already generated and SDK-compiled
+from the corresponding physical IR; source-to-Rust integration is pending.
+It uses the official baseline's full-width fetch, 256-slice broadcast, and
+16-element collection from
 [`broadcast_hidden`](https://github.com/micro2026-moa/furiosa-opt-gemma4-12B/blob/850428729c1b9af0c0b86a9cf694e3b4b4486b29/src/device/layout.rs).
-The example adds an HBM output containing all 256 copies so the helper can be
-compiled independently. The generated Rust is:
+An HBM output exposes all 256 copies for independent compilation.
 
 ```rust
 #![feature(register_tool)]
@@ -96,19 +111,6 @@ pub fn broadcast(
     v1.view().to_hbm_view(&mut ctx.tdma, out.view_mut());
 }
 ```
-
-Compile the saved IR in a configured Linux SDK environment:
-
-```sh
-uv run ppy build build/broadcast.ppyir --backend furiosa -o build/compiled
-```
-
-The output contains a Rust crate, source map, device binary, schedule JSON, and
-`manifest.json`. A successful compilation does not establish hardware correctness.
-
-The source-level interface being targeted is
-`uv run ppy emit furiosa-rust kernel.ppy -o kernel.rs`. It requires the upstream
-frontend fix and semantic lowering; it is not a working example in this revision.
 
 ## MOA 2026 baseline reproduction
 
@@ -142,8 +144,18 @@ bash scripts/check.sh          # lint, types, tests, README emission, package ch
 bash scripts/furiosa_check.sh  # real SDK compile; requires Linux + Furiosa SDK
 ```
 
-The README's Rust block is checked against freshly emitted output and the golden
-fixture. CI runs software checks on Python 3.12, 3.13, and 3.14 and smoke-tests
+Until source integration is ready, reproduce the Rust above through the physical
+IR fixture; the second command requires a configured Linux SDK environment:
+
+```sh
+uv run python examples/broadcast/build_ir.py
+uv run ppy build build/broadcast.ppyir --backend furiosa -o build/compiled
+```
+
+The build retains a Rust crate, source map, device binary, schedule JSON, and
+`manifest.json`. The README's Rust block is checked against freshly emitted
+physical IR output and the golden fixture. CI runs software checks on Python
+3.12, 3.13, and 3.14 and smoke-tests
 the built wheel. Hardware validation is pending; `scripts/rngd_check.sh` currently
 fails explicitly until its correctness suite is implemented.
 
