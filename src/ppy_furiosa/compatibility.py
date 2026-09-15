@@ -80,8 +80,8 @@ def enable_custom_terminators(dialect: Dialect) -> None:
     which consults the process registry instead of the supplied project registry.
     Block.terminator/successors share the defect. This public registration fixes
     those lookups without monkeypatching; normal project registration is retained.
-    The exact upstream symbols and compatibility boundary are documented in
-    docs/backend.md.
+    The driver also reads .ppyir through the process registry. Recheck both
+    boundaries when upgrading PPy; this workaround applies only to 0.3.1.
     """
     if version("ppy-lang") == "0.3.1":
         registry().register(dialect)

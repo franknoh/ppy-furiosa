@@ -2,7 +2,7 @@
 
 import subprocess
 import sys
-from importlib.metadata import entry_points
+from importlib.metadata import distribution, entry_points
 from pathlib import Path
 
 from ppy_compiler.driver.config import Config, PluginConfig
@@ -22,34 +22,13 @@ def test_plugin_discovery_loads_dialect() -> None:
 
 
 def test_backend_entry_point_and_format_ownership() -> None:
+    assert not any(ep.group == "console_scripts" for ep in distribution("ppy-furiosa").entry_points)
     backend = next(ep for ep in entry_points(group="ppy.backends") if ep.name == "furiosa")
     assert backend.load()({}).api_version == 1
     format_entry = next(
         ep for ep in entry_points(group="ppy.backend-formats") if ep.name == "furiosa-rust"
     )
     assert format_entry.value == "furiosa"
-
-
-def test_cli_emits_saved_physical_ir(tmp_path: Path) -> None:
-    path = tmp_path / "broadcast.ppyir"
-    output = tmp_path / "broadcast.rs"
-    write(broadcast_module(), path, make_registry())
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            "from ppy_furiosa.cli import main; raise SystemExit(main())",
-            "emit-ir",
-            str(path),
-            "-o",
-            str(output),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 0, result.stderr
-    assert "CustomBroadcast" in output.read_text()
 
 
 def test_ppy_build_reports_missing_sdk_without_creating_artifacts(tmp_path: Path) -> None:

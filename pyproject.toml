@@ -21,14 +21,15 @@ furiosa = "ppy_furiosa.backend:create_backend"
 [project.entry-points."ppy.backend-formats"]
 furiosa-rust = "furiosa"
 
-[project.scripts]
-ppy-furiosa = "ppy_furiosa.cli:main"
+[project.urls]
+Repository = "https://github.com/franknoh/ppy-furiosa"
+Issues = "https://github.com/franknoh/ppy-furiosa/issues"
 
 [tool.hatch.version]
 path = "src/ppy_furiosa/version.py"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff", "pyright", "pylint", "mkdocs", "mkdocs-material", "twine"]
+dev = ["pytest>=8", "ruff", "pyright", "pylint", "twine"]
 
 [tool.uv]
 constraint-dependencies = ["ppy-lang==0.3.1"]

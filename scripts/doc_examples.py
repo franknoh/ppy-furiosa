@@ -1,4 +1,4 @@
-"""Exercise installed CLI emission and optionally compile the physical example."""
+"""Verify the README's emitted Rust and optionally build it through the PPy CLI."""
 
 from __future__ import annotations
 
@@ -7,13 +7,10 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import sysconfig
 import tempfile
 from pathlib import Path
-
-from ppy_compiler.ir.codec import write
-
-from ppy_furiosa.physical import broadcast_module, make_registry
 
 
 def command(name: str) -> str:
@@ -29,18 +26,20 @@ def command(name: str) -> str:
 
 
 def check_example(root: Path, directory: Path, *, build: bool) -> None:
-    ir_path = directory / "broadcast.ppyir"
-    rust_path = directory / "broadcast.rs"
-    write(broadcast_module(), ir_path, make_registry())
+    ir_path = directory / "build/broadcast.ppyir"
+    rust_path = directory / "build/broadcast.rs"
     subprocess.run(
-        [command("ppy-furiosa"), "emit-ir", str(ir_path), "-o", str(rust_path)],
-        cwd=root,
+        [sys.executable, str(root / "examples/broadcast/build_ir.py")],
+        cwd=directory,
         check=True,
     )
     expected = (root / "tests/golden/broadcast.rs").read_text(encoding="utf-8")
     actual = rust_path.read_text(encoding="utf-8")
     if actual != expected:
-        raise RuntimeError("documented CLI output differs from tests/golden/broadcast.rs")
+        raise RuntimeError("example output differs from tests/golden/broadcast.rs")
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    if f"```rust\n{actual}```" not in readme:
+        raise RuntimeError("README Rust example differs from actual emitted output")
     if build:
         output = directory / "compiled"
         subprocess.run(
@@ -57,7 +56,7 @@ def check_example(root: Path, directory: Path, *, build: bool) -> None:
         if not binaries or not all(path.stat().st_size for path in binaries) or not schedules:
             raise RuntimeError("backend build did not produce a device binary and schedule")
         print(f"SDK gate: {len(binaries)} binary, {len(schedules)} schedule; no hardware run")
-    print("Documentation example: canonical IR and installed CLI golden emission passed")
+    print("README example: emitted Rust matches the README and golden fixture")
 
 
 def main() -> None:
