@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [manifest]
-constraints = [{ name = "ppy-lang", specifier = "==0.3.1" }]
+constraints = [{ name = "ppy-lang", specifier = "==0.3.2" }]
 
 [[package]]
 name = "astroid"
@@ -638,7 +638,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "ppy-lang", extras = ["llvm"], specifier = ">=0.3.1,<0.4" }]
+requires-dist = [{ name = "ppy-lang", extras = ["llvm"], specifier = ">=0.3.2,<0.4" }]
 
 [package.metadata.requires-dev]
 dev = [
@@ -651,16 +651,16 @@ dev = [
 
 [[package]]
 name = "ppy-lang"
-version = "0.3.1"
+version = "0.3.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "libcst", version = "1.7.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.14'" },
     { name = "libcst", version = "1.9.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14'" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/50/85/e3950410b281234ac62226e6f29c9b3a96c6290ec0734327e5deac563623/ppy_lang-0.3.1.tar.gz", hash = "sha256:697c91d01b99bdb1c37a5c9c885a130a94743a8ff9647b91af03290de604a0ac", size = 1063879, upload-time = "2026-09-15T05:57:53.25Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e0/d8/a66b6885877b2a04de6c611a0a6232cf891c8427beb902188adec0122671/ppy_lang-0.3.2.tar.gz", hash = "sha256:c2e810dbebf1299532116becacad99b3e0000faf76c2615d66a2839a891daa04", size = 1076409, upload-time = "2026-09-15T08:40:13.054Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3d/59/bc02157582e3e680bbc0b62b79116ffef55f1d57e8418ba6240d5a91d68b/ppy_lang-0.3.1-py3-none-any.whl", hash = "sha256:f599ae74571c0f926d0ed7392b07bb3e6c4613245032a797b0da2c70001dfba5", size = 818908, upload-time = "2026-09-15T05:57:50.561Z" },
+    { url = "https://files.pythonhosted.org/packages/81/12/388ea3e1f14f61f5d4dd183bd20ed16fc9f477378753f6b53efa3de411d0/ppy_lang-0.3.2-py3-none-any.whl", hash = "sha256:d69826434a278f872ae835b837a80ff8905cf71c4e0fbcfca8f3e27df119f890", size = 824650, upload-time = "2026-09-15T08:40:11.543Z" },
 ]
 
 [package.optional-dependencies]

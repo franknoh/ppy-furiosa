@@ -21,7 +21,6 @@ from ppy_compiler.ir.verify import Checker
 from .compatibility import (
     add_function,
     create_operation,
-    enable_custom_terminators,
     ir_attributes,
 )
 from .mapping import Const, Expr, ExprKind, Mapping, Symbol
@@ -205,7 +204,6 @@ class PhysicalDialect(Dialect):
 
 
 def make_registry() -> DialectRegistry:
-    enable_custom_terminators(PhysicalDialect())
     registry = DialectRegistry()
     registry.register(CoreDialect())
     registry.register(PhysicalDialect())
@@ -234,16 +232,14 @@ def broadcast_module(size: int = 3840) -> IRModule:
     entry = function.add_entry_block()
     builder = Builder(entry, SourceLocation("examples/broadcast/build_ir.py", 1))
     loaded = create_operation(builder, "rngd.to_dm", [entry.arguments[0]], [local.to_ir()]).result
-    pipeline = _broadcast_pipeline(builder, loaded, local, result)
+    pipeline = broadcast_pipeline(builder, loaded, local, result)
     create_operation(builder, "rngd.to_hbm", [pipeline.result, entry.arguments[1]])
     create_operation(builder, "core.ret")
     return module
 
 
-def _broadcast_pipeline(
-    builder: Builder, loaded: Value, local: Tensor, result: Tensor
-) -> Operation:
-    hidden, copies = Symbol("H"), Symbol("Copies")
+def broadcast_pipeline(builder: Builder, loaded: Value, local: Tensor, result: Tensor) -> Operation:
+    hidden, copies = local.logical.axes[0], result.logical.axes[0]
     pipeline = create_operation(
         builder, "rngd.pipeline", [loaded], [result.to_ir()], {"context": "main"}
     )

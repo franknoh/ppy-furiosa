@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from ppy_compiler.backend import BackendConfig, BackendContext, BackendError
-from ppy_compiler.ir import IRModule
+from ppy_compiler.ir import IRModule, registry, verify
 from ppy_compiler.ir.codec import decode, encode
 
 from ppy_furiosa.backend import create_backend
@@ -27,6 +27,7 @@ def test_emits_without_sdk_and_refuses_other_formats() -> None:
     backend = create_backend({"cargo": "does-not-exist"})
     assert backend.api_version == 1
     assert backend.emit_formats()[0].name == "furiosa-rust"
+    assert backend.emit_formats()[0].requires_toolchain is False
     assert "CustomBroadcast" in backend.emit(broadcast_module(), "furiosa-rust", context())
     assert not backend.toolchain_status().available
     with pytest.raises(BackendError, match="format"):
@@ -38,10 +39,13 @@ def test_empty_ir_is_not_a_successful_build() -> None:
         create_backend({}).validate(IRModule("empty"), context())
 
 
-def test_backend_activation_supports_ppy031_default_registry_reader() -> None:
+def test_backend_and_codec_keep_dialects_in_the_project_registry() -> None:
     create_backend({})
-    encoded = encode(broadcast_module(), make_registry())
-    assert decode(encoded).name == "broadcast"
+    dialects = make_registry()
+    module = decode(encode(broadcast_module(), dialects), dialects)
+    assert module.name == "broadcast"
+    assert not verify(module, dialects)
+    assert registry().op_spec("rngd.yield") is None
 
 
 def test_relative_output_manifest_handles_absolute_toolchain_paths(

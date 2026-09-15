@@ -7,7 +7,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import sysconfig
 import tempfile
 from pathlib import Path
@@ -25,37 +24,53 @@ def command(name: str) -> str:
     return path
 
 
-def check_example(root: Path, directory: Path, *, build: bool) -> None:
-    ir_path = directory / "build/broadcast.ppyir"
-    rust_path = directory / "build/broadcast.rs"
+def check_build(root: Path, target: Path, output: Path, expected: str) -> None:
+    """Compile through PPy's driver and require real, current SDK artifacts."""
     subprocess.run(
-        [sys.executable, str(root / "examples/broadcast/build_ir.py")],
-        cwd=directory,
+        [command("ppy"), "build", str(target), "--backend", "furiosa", "-o", str(output)],
+        cwd=root,
         check=True,
     )
-    expected = (root / "tests/golden/broadcast.rs").read_text(encoding="utf-8")
+    manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+    if not manifest.get("generated_files"):
+        raise RuntimeError("backend manifest contains no generated files")
+    generated = [output / name for name in manifest["generated_files"]]
+    binaries = [path for path in generated if path.suffix == ".bin"]
+    schedules = [path for path in generated if path.name == "schedule.json"]
+    rust_files = [path for path in generated if path.suffix == ".rs"]
+    if len(binaries) != 1 or not binaries[0].stat().st_size or len(schedules) != 1:
+        raise RuntimeError("backend build did not produce one device binary and schedule")
+    if len(rust_files) != 1 or rust_files[0].read_text(encoding="utf-8") != expected:
+        raise RuntimeError("build source differs from emitted Rust")
+    print(f"SDK gate ({target.suffix}): 1 binary, 1 schedule; no hardware run")
+
+
+def check_example(root: Path, directory: Path, *, build: bool) -> None:
+    source = root / "examples/broadcast/kernel.ppy"
+    ir_path = directory / "kernel.ppyir"
+    rust_path = directory / "kernel.rs"
+    subprocess.run(
+        [command("ppy"), "emit", "furiosa-rust", str(source), "-o", str(rust_path)],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(
+        [command("ppy"), "emit", "ir", str(source), "-o", str(ir_path)],
+        cwd=root,
+        check=True,
+    )
+    expected = (root / "tests/golden/source_broadcast.rs").read_text(encoding="utf-8")
     actual = rust_path.read_text(encoding="utf-8")
     if actual != expected:
-        raise RuntimeError("example output differs from tests/golden/broadcast.rs")
+        raise RuntimeError("source emit output differs from tests/golden/source_broadcast.rs")
     readme = (root / "README.md").read_text(encoding="utf-8")
+    if f"```python\n{source.read_text(encoding='utf-8')}```" not in readme:
+        raise RuntimeError("README kernel.ppy example differs from the tested source")
     if f"```rust\n{actual}```" not in readme:
         raise RuntimeError("README Rust example differs from actual emitted output")
     if build:
-        output = directory / "compiled"
-        subprocess.run(
-            [command("ppy"), "build", str(ir_path), "--backend", "furiosa", "-o", str(output)],
-            cwd=root,
-            check=True,
-        )
-        manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
-        if not manifest.get("generated_files"):
-            raise RuntimeError("backend manifest contains no generated files")
-        generated = [output / name for name in manifest["generated_files"]]
-        binaries = [path for path in generated if path.suffix == ".bin"]
-        schedules = [path for path in generated if path.name == "schedule.json"]
-        if not binaries or not all(path.stat().st_size for path in binaries) or not schedules:
-            raise RuntimeError("backend build did not produce a device binary and schedule")
-        print(f"SDK gate: {len(binaries)} binary, {len(schedules)} schedule; no hardware run")
+        check_build(root, source, directory / "compiled-source", actual)
+        check_build(root, ir_path, directory / "compiled-ir", actual)
     print("README example: emitted Rust matches the README and golden fixture")
 
 
