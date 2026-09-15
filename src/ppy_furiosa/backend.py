@@ -18,10 +18,8 @@ from ppy_compiler.backend import (
 )
 from ppy_compiler.ir import IRModule
 
-from .compatibility import enable_custom_terminators
 from .emitter import emit_rust, validate
 from .mapping import identifier
-from .physical import PhysicalDialect
 from .toolchain import FuriosaToolchain
 from .version import __version__
 
@@ -40,7 +38,6 @@ class FuriosaBackend(Backend):
                 raise BackendError(f"Furiosa option {key} must be a nonempty string")
         if self.options.get("target", "rngd") != "rngd":
             raise BackendError("Furiosa target must be rngd")
-        enable_custom_terminators(PhysicalDialect())
         self.toolchain = FuriosaToolchain(
             str(self.options.get("cargo", "cargo")), str(self.options.get("rustc", "rustc"))
         )
@@ -50,7 +47,12 @@ class FuriosaBackend(Backend):
 
     def emit_formats(self) -> tuple[EmitFormat, ...]:
         return (
-            EmitFormat("furiosa-rust", ".rs", description="Furiosa furiosa-opt Rust DSL source"),
+            EmitFormat(
+                "furiosa-rust",
+                ".rs",
+                description="Furiosa furiosa-opt Rust DSL source",
+                requires_toolchain=False,
+            ),
         )
 
     def validate(self, module: IRModule, context: BackendContext) -> None:

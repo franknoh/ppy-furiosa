@@ -10,17 +10,15 @@ pinned at `850428729c1b9af0c0b86a9cf694e3b4b4486b29`.
 
 ## Status
 
-The current development version is **0.1.0a1**. A physical BF16 broadcast can
-be encoded as canonical `.ppyir`, emitted as Rust, and compiled through the
-Furiosa SDK into a device binary and schedule. This is the first helper toward
-baseline reproduction; the three complete competition kernels and hardware
-correctness checks are still pending.
+The current development version is **0.1.0a1**, using **PPy 0.3.2**. The package
+registers `ppy.plugins`, `ppy.backends`, and the `furiosa-rust` emit format.
+Commands use PPy's CLI.
 
-PPy **0.3.1** is currently locked. Its frontend does not carry generic plugin
-types and calls into canonical IR, so `.ppy` source compilation is blocked.
-Integration will resume after the upstream **0.3.2** fix is available and verified.
-The package registers `ppy.plugins`, `ppy.backends`, and the `furiosa-rust`
-emit format. Commands use PPy's CLI.
+PPy 0.3.2 provides the custom-type and operation frontend bridge, project-scoped
+dialect registries, and optional SDK checks for text emission. The extension
+uses these APIs; the earlier PPy frontend blocker and global registry workaround
+no longer apply. The first supported computation is a BF16 broadcast. Complete
+MOA kernels, tuning, and hardware correctness validation are still pending.
 
 ## Setup
 
@@ -35,7 +33,7 @@ uv run ppy doctor
 | --- | --- |
 | Development Python | `3.12.13` in `.python-version` |
 | Supported Python | `>=3.12` in `pyproject.toml` |
-| Compiler | `ppy-lang[llvm]==0.3.1` in `uv.lock` and uv constraints |
+| Compiler | `ppy-lang[llvm]==0.3.2` in `uv.lock` and uv constraints |
 | Package version | `src/ppy_furiosa/version.py` |
 | Furiosa SDK | `cargo-furiosa-opt` and `furiosa-opt-std` `0.6.0` |
 | Generated Rust toolchain | `nightly-2026-05-01` |
@@ -57,31 +55,32 @@ target = "rngd"
 
 ## `kernel.ppy` → Rust
 
-The intended workflow is:
+Save the source below as `kernel.ppy` in this project, then emit Rust:
 
 ```sh
 uv run ppy emit furiosa-rust kernel.ppy -o kernel.rs
 ```
 
-**Pending:** this source workflow needs the PPy 0.3.2 frontend bridge and
-ppy-furiosa's semantic lowering. The following `kernel.ppy` is the proposed
-source API, not an executable example in 0.1.0a1:
+The same source is checked in at `examples/broadcast/kernel.ppy`. Shapes and
+element formats use PPy's annotation metadata; writable destinations use
+`fx.MutableTensor`:
 
 ```python
-import ppy_furiosa as fr
+from typing import Annotated
+
+import ppy
+import ppy_furiosa as fx
+
+Input = Annotated[fx.Tensor, ppy.Shape(3840), ppy.DType("bf16")]
+Output = Annotated[fx.MutableTensor, ppy.Shape(256, 3840), ppy.DType("bf16")]
 
 
-@fr.kernel
-def broadcast(
-    x: fr.Tensor[fr.bf16, (3840,)],
-    out: fr.Tensor[fr.bf16, (256, 3840)],
-):
-    fr.store(out, fr.broadcast(x, copies=256))
+def broadcast(x: Input, out: Output) -> None:
+    value = fx.broadcast(x, copies=256)
+    fx.store(out, value)
 ```
 
-The output target is the Rust below. It is already generated and SDK-compiled
-from the corresponding physical IR; source-to-Rust integration is pending.
-It uses the official baseline's full-width fetch, 256-slice broadcast, and
+Emission uses the official baseline's full-width fetch, 256-slice broadcast, and
 16-element collection from
 [`broadcast_hidden`](https://github.com/micro2026-moa/furiosa-opt-gemma4-12B/blob/850428729c1b9af0c0b86a9cf694e3b4b4486b29/src/device/layout.rs).
 An HBM output exposes all 256 copies for independent compilation.
@@ -95,7 +94,7 @@ use furiosa_opt_std::prelude::*;
 axes![Copies = 256, H = 3840];
 
 #[device(chip = 1)]
-pub fn broadcast(
+pub fn kernel_broadcast(
     ctx: &mut Context,
     x: &HbmTensor<bf16, m![1], m![H]>,
     out: &mut HbmTensor<bf16, m![1], m![Copies, H]>,
@@ -144,25 +143,26 @@ bash scripts/check.sh          # lint, types, tests, README emission, package ch
 bash scripts/furiosa_check.sh  # real SDK compile; requires Linux + Furiosa SDK
 ```
 
-Until source integration is ready, reproduce the Rust above through the physical
-IR fixture; the second command requires a configured Linux SDK environment:
+Run the checked-in source directly, or save its lowered IR. Device compilation
+requires a configured Linux SDK environment:
 
 ```sh
-uv run python examples/broadcast/build_ir.py
-uv run ppy build build/broadcast.ppyir --backend furiosa -o build/compiled
+uv run ppy emit furiosa-rust examples/broadcast/kernel.ppy -o build/kernel.rs
+uv run ppy emit ir examples/broadcast/kernel.ppy -o build/kernel.ppyir
+uv run ppy build examples/broadcast/kernel.ppy --backend furiosa -o build/compiled
 ```
 
 The build retains a Rust crate, source map, device binary, schedule JSON, and
-`manifest.json`. The README's Rust block is checked against freshly emitted
-physical IR output and the golden fixture. CI runs software checks on Python
+`manifest.json`. The README's source and Rust blocks are checked against the
+actual `ppy emit` result and golden fixture. CI runs software checks on Python
 3.12, 3.13, and 3.14 and smoke-tests
 the built wheel. Hardware validation is pending; `scripts/rngd_check.sh` currently
 fails explicitly until its correctness suite is implemented.
 
 Source lives in `src/ppy_furiosa`, tests in `tests`, and generated artifacts in
 ignored `build/`. Mapping/tensor metadata and physical IR are separate from Rust
-emission and toolchain execution. PPy 0.3.1 registry compatibility is isolated in
-`compatibility.py` and must be reviewed when upgrading PPy.
+emission and toolchain execution. Dialects are registered per project;
+`compatibility.py` contains static typing adapters for public IR attribute APIs.
 
 `main` is the default branch and release line; `dev` is the development line.
 Both start from the initial repository setup. Create work branches from `dev`,
